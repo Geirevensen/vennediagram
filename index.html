@@ -129,7 +129,6 @@
       text-overflow: ellipsis;
     }
 
-    /* litt roligere når man zoomer langt ut */
     .zoomed-out .card{opacity:.55;}
     .zoomed-out .name{opacity:.70;}
 
@@ -194,6 +193,21 @@
       backdrop-filter: blur(8px);
       user-select:none;
     }
+
+    .version{
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:6;
+      padding:7px 10px;
+      border-radius:999px;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.08);
+      color: rgba(155,176,201,.90);
+      font-size: 12px;
+      backdrop-filter: blur(8px);
+      user-select:none;
+    }
   </style>
 </head>
 <body>
@@ -209,6 +223,7 @@
 </div>
 
 <div class="hud">Dra for å panorere · scroll for zoom · klikk på person for detaljer</div>
+<div class="version">v1.10</div>
 
 <div id="overlay" role="dialog" aria-modal="true">
   <div class="modal">
@@ -233,16 +248,15 @@
   const W = () => stage.clientWidth;
   const H = () => stage.clientHeight;
 
-  /* “verden”: mindre enn før for å redusere luft.
-     Du kan øke igjen når du har flere hundre folk. */
+  // mindre “verden” for mindre luft
   const WORLD_W = 3600;
   const WORLD_H = 2400;
 
   // lagdeling
   const world = svg.append("g").attr("id","world");
-  const gEncl  = world.append("g").attr("class","layer-encl");
-  const gLinks = world.append("g").attr("class","layer-links");
-  const gNodes = world.append("g").attr("class","layer-nodes");
+  const gEnclLayer  = world.append("g").attr("class","layer-encl");
+  const gLinkLayer  = world.append("g").attr("class","layer-links");
+  const gNodeLayer  = world.append("g").attr("class","layer-nodes");
 
   // palett
   const palette = [
@@ -254,13 +268,13 @@
   // innhegninger: ekskluder “ingen”
   const encl = (data.enclosures || []).filter(e => e.id !== "ingen" && e.members && e.members.length);
 
-  // personer
+  // noder
   const nodes = (data.people || []).map(p => ({
     ...p,
     roles: p.roles || { is_me:false, is_gateway:false, gateway_for:[] }
   }));
 
-  // auto-legge inn Geir hvis han mangler (midtpunkt)
+  // auto-opprett Geir som midtpunkt hvis han mangler
   const hasGeir = nodes.some(n => ((n.first_name || n.name || "").toLowerCase().includes("geir")));
   if (!hasGeir){
     const maxId = nodes.reduce((m,n) => Math.max(m, Number(n.id)||0), 0);
@@ -284,38 +298,28 @@
 
   // relasjoner
   const peopleById = new Map((data.people || []).map(p => [p.id, p]));
-  // oppdater map med auto-geir hvis lagt inn
   nodes.forEach(n => { if (!peopleById.has(n.id)) peopleById.set(n.id, n); });
 
   const links = (data.relations || [])
-    .map(r => ({
-      ...r,
-      source: peopleById.get(r.source),
-      target: peopleById.get(r.target)
-    }))
+    .map(r => ({...r, source: peopleById.get(r.source), target: peopleById.get(r.target)}))
     .filter(l => l.source && l.target);
 
   // zoom/pan
-  const ZOOM_MIN = 0.25;
-  const ZOOM_MAX = 3.2;
-
   const zoom = d3.zoom()
-    .scaleExtent([ZOOM_MIN, ZOOM_MAX])
+    .scaleExtent([0.25, 3.2])
     .on("zoom", (event) => {
       world.attr("transform", event.transform);
       svg.classed("zoomed-out", event.transform.k < 0.55);
     });
 
   svg.call(zoom);
-
   svg.on("wheel.zoom", (event) => {
     if (event.ctrlKey) return;
     event.preventDefault();
   }, { passive:false });
 
-  // --- gruppelayouter basert på overlapp
+  // --- grupper: størrelser + overlapp-lenker
   function sizeFor(count){
-    // litt tettere enn før
     const base = 300 * 210;
     const per  = 92  * 92;
     const area = base + count * per;
@@ -325,7 +329,6 @@
     return {w, h};
   }
 
-  // bygg gruppedata
   const groups = encl.map((e, i) => ({
     id: e.id,
     label: e.label,
@@ -336,45 +339,30 @@
     y: WORLD_H/2 + (Math.random()-0.5)*260
   }));
 
-  const groupById = new Map(groups.map(g => [g.id, g]));
-
-  // beregn overlap-lenker mellom grupper
-  const gLinks = [];
+  // >>> HER var bugen før: “groupLinks” (ikke gLinkLayer)
+  const groupLinks = [];
   for (let i=0;i<groups.length;i++){
     for (let j=i+1;j<groups.length;j++){
       const a = groups[i], b = groups[j];
       let shared = 0;
-      // tell felles medlemmer (sett-interseksjon)
-      // iterér over minste sett for speed
       const small = a.members.size < b.members.size ? a.members : b.members;
       const big   = a.members.size < b.members.size ? b.members : a.members;
       for (const id of small) if (big.has(id)) shared++;
-
-      if (shared > 0){
-        // Jo mer overlap, jo kortere “fjær”
-        gLinks.push({
-          source: a.id,
-          target: b.id,
-          shared
-        });
-      }
+      if (shared > 0) groupLinks.push({ source: a.id, target: b.id, shared });
     }
   }
 
-  // gruppesimulering: trekker overlappende grupper sammen, men ikke for tett
   const groupSim = d3.forceSimulation(groups)
     .force("charge", d3.forceManyBody().strength(-240))
     .force("center", d3.forceCenter(WORLD_W/2, WORLD_H/2))
     .force("collide", d3.forceCollide(d => Math.max(d.w, d.h)/2).strength(0.8))
-    .force("link", d3.forceLink(gLinks)
+    .force("link", d3.forceLink(groupLinks)
       .id(d => d.id)
       .distance(l => 360 - Math.min(220, l.shared * 70))
       .strength(l => Math.min(0.45, 0.18 + l.shared * 0.10)));
 
-  // kjør noen “tørre” ticks før vi tegner rektangler, så de starter pent
   for (let k=0;k<260;k++) groupSim.tick();
 
-  // gjør om gruppe-senter til rektangler
   function rectOfGroup(g){
     return {
       id: g.id,
@@ -390,7 +378,6 @@
 
   let rects = new Map(groups.map(g => [g.id, rectOfGroup(g)]));
 
-  // --- plassér noder i “hjemgruppe” (overlapp-personer havner nær midten av snittet, men clamped i hjem)
   function centerOf(r){ return {x: r.x + r.w/2, y: r.y + r.h/2}; }
 
   function pickHomeRect(n){
@@ -437,10 +424,10 @@
     n.y = t.y + (Math.random() - 0.5) * 60;
   });
 
-  // tegn innhegninger (rektangler)
+  // tegn innhegninger
   const enclArr = Array.from(rects.values());
 
-  const enclSel = gEncl.selectAll("rect.enclosure")
+  const enclSel = gEnclLayer.selectAll("rect.enclosure")
     .data(enclArr, d => d.id)
     .enter()
     .append("rect")
@@ -450,7 +437,7 @@
     .attr("rx", 26).attr("ry", 26)
     .attr("stroke", d=>d.stroke);
 
-  const enclTitle = gEncl.selectAll("text.encl-title")
+  const enclTitle = gEnclLayer.selectAll("text.encl-title")
     .data(enclArr, d => d.id)
     .enter()
     .append("text")
@@ -459,15 +446,15 @@
     .attr("y", d=>d.y + 22)
     .text(d=>d.label);
 
-  // lenker
-  const linkSel = gLinks.selectAll("line")
+  // relasjonslinjer
+  const linkSel = gLinkLayer.selectAll("line")
     .data(links)
     .enter()
     .append("line")
     .attr("class", d => `link ${d.type || ""}`);
 
   // noder
-  const nodeSel = gNodes.selectAll("g.node")
+  const nodeSel = gNodeLayer.selectAll("g.node")
     .data(nodes, d => d.id)
     .enter()
     .append("g")
@@ -595,17 +582,15 @@
 
   sim.on("tick", () => {
     nodes.forEach(clampToRect);
-
     nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
-
     linkSel
       .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
       .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
   });
 
-  // startvisning: oversikt, sentrert på “verden”
+  // startvisning
   function fitInitial(){
-    const k = 0.65; // litt nærmere enn før
+    const k = 0.65;
     const tx = (W()/2) - (WORLD_W/2) * k;
     const ty = (H()/2) - (WORLD_H/2) * k;
     svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
@@ -618,7 +603,6 @@
   ro.observe(stage);
 
   fitInitial();
-
 })();
 </script>
 </body>
