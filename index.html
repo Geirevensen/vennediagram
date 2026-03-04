@@ -19,7 +19,7 @@
 
       /* innhegninger */
       --enclStroke: 8px;
-      --enclFill: rgba(255,255,255,0.03);
+      --enclFill: rgba(255,255,255,0.035);
       --enclPad: 18;     /* luft inni innhegning */
       --enclHeader: 30;  /* plass til tittel */
     }
@@ -129,7 +129,7 @@
       text-overflow: ellipsis;
     }
 
-    /* “vektor-feel”: demp kort når man zoomer langt ut */
+    /* litt roligere når man zoomer langt ut */
     .zoomed-out .card{opacity:.55;}
     .zoomed-out .name{opacity:.70;}
 
@@ -180,7 +180,6 @@
     }
     #overlay .body .empty{color: rgba(155,176,201,.85);}
 
-    /* liten hjelpetekst nede til venstre */
     .hud{
       position:fixed;
       left:12px;
@@ -234,9 +233,10 @@
   const W = () => stage.clientWidth;
   const H = () => stage.clientHeight;
 
-  // “verden” (stort, navigerbart lerret)
-  const WORLD_W = 6000;
-  const WORLD_H = 4000;
+  /* “verden”: mindre enn før for å redusere luft.
+     Du kan øke igjen når du har flere hundre folk. */
+  const WORLD_W = 3600;
+  const WORLD_H = 2400;
 
   // lagdeling
   const world = svg.append("g").attr("id","world");
@@ -244,107 +244,162 @@
   const gLinks = world.append("g").attr("class","layer-links");
   const gNodes = world.append("g").attr("class","layer-nodes");
 
-  // lavsaturert palett til innhegninger
+  // palett
   const palette = [
-    "rgba(160,190,220,.34)","rgba(195,170,215,.34)","rgba(170,210,190,.34)",
-    "rgba(220,190,160,.34)","rgba(190,220,160,.34)","rgba(210,170,170,.34)",
-    "rgba(170,180,225,.34)","rgba(205,205,170,.34)","rgba(180,210,225,.34)"
+    "rgba(160,190,220,.38)","rgba(195,170,215,.38)","rgba(170,210,190,.38)",
+    "rgba(220,190,160,.38)","rgba(190,220,160,.38)","rgba(210,170,170,.38)",
+    "rgba(170,180,225,.38)","rgba(205,205,170,.38)","rgba(180,210,225,.38)"
   ];
 
   // innhegninger: ekskluder “ingen”
   const encl = (data.enclosures || []).filter(e => e.id !== "ingen" && e.members && e.members.length);
 
-  // kart: id->person
-  const peopleById = new Map((data.people || []).map(p => [p.id, p]));
+  // personer
+  const nodes = (data.people || []).map(p => ({
+    ...p,
+    roles: p.roles || { is_me:false, is_gateway:false, gateway_for:[] }
+  }));
 
-  // nodes: kopier for D3
-  const nodes = (data.people || []).map(p => ({...p}));
-
-  // links
-  const links = (data.relations || [])
-    .map(r => ({...r, source: peopleById.get(r.source), target: peopleById.get(r.target)}))
-    .filter(l => l.source && l.target);
+  // auto-legge inn Geir hvis han mangler (midtpunkt)
+  const hasGeir = nodes.some(n => ((n.first_name || n.name || "").toLowerCase().includes("geir")));
+  if (!hasGeir){
+    const maxId = nodes.reduce((m,n) => Math.max(m, Number(n.id)||0), 0);
+    nodes.push({
+      id: maxId + 1,
+      first_name: "Geir",
+      last_name: "",
+      name: "Geir",
+      display_name: "Geir",
+      groups: [],
+      group_labels: [],
+      avatar: "",
+      bio: "",
+      roles: { is_me:true, is_gateway:false, gateway_for:[] }
+    });
+  }
 
   // finn “meg”
   const me = nodes.find(n => n.roles && n.roles.is_me) ||
              nodes.find(n => ((n.first_name||"").toLowerCase() === "geir"));
 
-  // ---- zoom/pan (vektor-følelse)
-  const ZOOM_MIN = 0.20;
-  const ZOOM_MAX = 3.20;
+  // relasjoner
+  const peopleById = new Map((data.people || []).map(p => [p.id, p]));
+  // oppdater map med auto-geir hvis lagt inn
+  nodes.forEach(n => { if (!peopleById.has(n.id)) peopleById.set(n.id, n); });
+
+  const links = (data.relations || [])
+    .map(r => ({
+      ...r,
+      source: peopleById.get(r.source),
+      target: peopleById.get(r.target)
+    }))
+    .filter(l => l.source && l.target);
+
+  // zoom/pan
+  const ZOOM_MIN = 0.25;
+  const ZOOM_MAX = 3.2;
 
   const zoom = d3.zoom()
     .scaleExtent([ZOOM_MIN, ZOOM_MAX])
     .on("zoom", (event) => {
       world.attr("transform", event.transform);
-
-      // liten “vektor-feel”: når man er langt ute, gjør alt litt roligere
-      const k = event.transform.k;
-      svg.classed("zoomed-out", k < 0.55);
+      svg.classed("zoomed-out", event.transform.k < 0.55);
     });
 
   svg.call(zoom);
 
-  // la ctrl+wheel være nettleser-zoom, ikke kart-zoom
   svg.on("wheel.zoom", (event) => {
     if (event.ctrlKey) return;
     event.preventDefault();
   }, { passive:false });
 
-  // ---- layout: gruppe-rektangler + grid inni (med overlapp via “hjem-gruppe”)
+  // --- gruppelayouter basert på overlapp
   function sizeFor(count){
-    // skaler areal med antall (gir luft)
-    const base = 340 * 240;
-    const per  = 105 * 105;
+    // litt tettere enn før
+    const base = 300 * 210;
+    const per  = 92  * 92;
     const area = base + count * per;
-
     const aspect = 1.35;
     const w = Math.sqrt(area * aspect);
     const h = area / w;
     return {w, h};
   }
 
-  function computeEnclosureRects(){
-    const cx = WORLD_W / 2;
-    const cy = WORLD_H / 2;
-    const ring = Math.min(WORLD_W, WORLD_H) * 0.22;
+  // bygg gruppedata
+  const groups = encl.map((e, i) => ({
+    id: e.id,
+    label: e.label,
+    members: new Set(e.members),
+    ...sizeFor(e.members.length),
+    stroke: palette[i % palette.length],
+    x: WORLD_W/2 + (Math.random()-0.5)*400,
+    y: WORLD_H/2 + (Math.random()-0.5)*260
+  }));
 
-    const rects = new Map();
-    const order = encl.slice().sort((a,b) => (b.members.length - a.members.length));
+  const groupById = new Map(groups.map(g => [g.id, g]));
 
-    order.forEach((e, i) => {
-      const s = sizeFor(e.members.length);
-      const a = (i / order.length) * Math.PI * 2;
+  // beregn overlap-lenker mellom grupper
+  const gLinks = [];
+  for (let i=0;i<groups.length;i++){
+    for (let j=i+1;j<groups.length;j++){
+      const a = groups[i], b = groups[j];
+      let shared = 0;
+      // tell felles medlemmer (sett-interseksjon)
+      // iterér over minste sett for speed
+      const small = a.members.size < b.members.size ? a.members : b.members;
+      const big   = a.members.size < b.members.size ? b.members : a.members;
+      for (const id of small) if (big.has(id)) shared++;
 
-      const x = cx + Math.cos(a) * ring - s.w/2;
-      const y = cy + Math.sin(a) * ring - s.h/2;
-
-      rects.set(e.id, {
-        id: e.id,
-        label: e.label,
-        members: new Set(e.members),
-        x, y, w: s.w, h: s.h,
-        stroke: palette[i % palette.length]
-      });
-    });
-
-    return rects;
+      if (shared > 0){
+        // Jo mer overlap, jo kortere “fjær”
+        gLinks.push({
+          source: a.id,
+          target: b.id,
+          shared
+        });
+      }
+    }
   }
 
-  let rects = computeEnclosureRects();
+  // gruppesimulering: trekker overlappende grupper sammen, men ikke for tett
+  const groupSim = d3.forceSimulation(groups)
+    .force("charge", d3.forceManyBody().strength(-240))
+    .force("center", d3.forceCenter(WORLD_W/2, WORLD_H/2))
+    .force("collide", d3.forceCollide(d => Math.max(d.w, d.h)/2).strength(0.8))
+    .force("link", d3.forceLink(gLinks)
+      .id(d => d.id)
+      .distance(l => 360 - Math.min(220, l.shared * 70))
+      .strength(l => Math.min(0.45, 0.18 + l.shared * 0.10)));
 
+  // kjør noen “tørre” ticks før vi tegner rektangler, så de starter pent
+  for (let k=0;k<260;k++) groupSim.tick();
+
+  // gjør om gruppe-senter til rektangler
+  function rectOfGroup(g){
+    return {
+      id: g.id,
+      label: g.label,
+      members: g.members,
+      w: g.w,
+      h: g.h,
+      x: g.x - g.w/2,
+      y: g.y - g.h/2,
+      stroke: g.stroke
+    };
+  }
+
+  let rects = new Map(groups.map(g => [g.id, rectOfGroup(g)]));
+
+  // --- plassér noder i “hjemgruppe” (overlapp-personer havner nær midten av snittet, men clamped i hjem)
   function centerOf(r){ return {x: r.x + r.w/2, y: r.y + r.h/2}; }
 
   function pickHomeRect(n){
     const gs = (n.groups || []).filter(g => rects.has(g));
     if (!gs.length) return null;
-
-    // gateway_for: foretrekk den
     if (n.roles && Array.isArray(n.roles.gateway_for) && n.roles.gateway_for.length){
       const g0 = n.roles.gateway_for.find(g => rects.has(g));
       if (g0) return rects.get(g0);
     }
-
     return rects.get(gs[0]);
   }
 
@@ -356,27 +411,25 @@
   }
 
   function gatewayAnchor(n){
-    // gateway nærmest mulig “meg”: mot den siden av innhegningen som vender inn mot sentrum
     const home = pickHomeRect(n);
     if (!home) return avgTarget(n);
 
     const c = centerOf(home);
     const mid = (me && me.x && me.y) ? {x: me.x, y: me.y} : {x: WORLD_W/2, y: WORLD_H/2};
-
     const vx = c.x - mid.x;
     const vy = c.y - mid.y;
 
     const towardX = (vx > 0) ? home.x : (home.x + home.w);
     const towardY = (vy > 0) ? home.y : (home.y + home.h);
 
-    const inset = 68;
+    const inset = 60;
     return {
       x: towardX + (vx > 0 ? inset : -inset),
-      y: towardY + (vy > 0 ? inset + 18 : -inset + 18)
+      y: towardY + (vy > 0 ? inset + 14 : -inset + 14)
     };
   }
 
-  // init pos
+  // init nodepos
   nodes.forEach(n => {
     n._homeRect = pickHomeRect(n);
     const t = (n.roles && n.roles.is_gateway) ? gatewayAnchor(n) : avgTarget(n);
@@ -384,11 +437,11 @@
     n.y = t.y + (Math.random() - 0.5) * 60;
   });
 
-  // ---- tegn innhegninger
+  // tegn innhegninger (rektangler)
   const enclArr = Array.from(rects.values());
 
   const enclSel = gEncl.selectAll("rect.enclosure")
-    .data(enclArr)
+    .data(enclArr, d => d.id)
     .enter()
     .append("rect")
     .attr("class","enclosure")
@@ -398,7 +451,7 @@
     .attr("stroke", d=>d.stroke);
 
   const enclTitle = gEncl.selectAll("text.encl-title")
-    .data(enclArr)
+    .data(enclArr, d => d.id)
     .enter()
     .append("text")
     .attr("class","encl-title")
@@ -406,16 +459,16 @@
     .attr("y", d=>d.y + 22)
     .text(d=>d.label);
 
-  // ---- lenker (skjult som standard)
+  // lenker
   const linkSel = gLinks.selectAll("line")
     .data(links)
     .enter()
     .append("line")
     .attr("class", d => `link ${d.type || ""}`);
 
-  // ---- noder: små kort uten gruppenavn inni
+  // noder
   const nodeSel = gNodes.selectAll("g.node")
-    .data(nodes)
+    .data(nodes, d => d.id)
     .enter()
     .append("g")
     .attr("class","node")
@@ -448,7 +501,7 @@
   card.append("div").attr("class","name")
     .text(d => d.display_name || d.first_name || d.name || ("ID " + d.id));
 
-  // ---- overlay
+  // overlay
   const overlay = document.getElementById("overlay");
   const ovName = document.getElementById("ovName");
   const ovTags = document.getElementById("ovTags");
@@ -457,7 +510,7 @@
   overlay.addEventListener("click", (e)=> { if (e.target === overlay) closeOverlay(); });
 
   function openOverlay(d){
-    ovName.textContent = d.name || (d.first_name + " " + d.last_name);
+    ovName.textContent = d.name || (d.first_name + " " + (d.last_name||""));
     const tags = (d.group_labels && d.group_labels.length) ? d.group_labels.join(" · ") : "Ingen gruppe";
     const extra = (d.roles && d.roles.is_gateway) ? " · inngangsperson" : "";
     ovTags.textContent = tags + extra;
@@ -468,7 +521,6 @@
       ovBio.innerHTML = '<span class="empty">Ingen biografi ennå.</span>';
     }
 
-    // vis lenker for valgt node (med mindre “vis alle” er på)
     if (!document.getElementById("showLinks").checked){
       linkSel.classed("on", l => (l.source.id === d.id || l.target.id === d.id));
     }
@@ -482,7 +534,7 @@
     }
   }
 
-  // ---- søk: dim alt annet
+  // søk
   const search = document.getElementById("search");
   search.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
@@ -492,7 +544,6 @@
       return hay.includes(q) ? 1 : 0.12;
     });
 
-    // også demp lenker når man søker
     if (!q){
       if (!document.getElementById("showLinks").checked) linkSel.classed("on", false);
       linkSel.style("opacity", null);
@@ -501,13 +552,13 @@
     }
   });
 
-  // ---- toggle for lenker
+  // toggle lenker
   const showLinks = document.getElementById("showLinks");
   showLinks.addEventListener("change", () => {
     linkSel.classed("on", showLinks.checked);
   });
 
-  // ---- force + “clamp” (holder noder inni hjem-innhegningen)
+  // clamp i hjemgruppe
   function clampToRect(n){
     const r = n._homeRect;
     if (!r) return;
@@ -534,13 +585,13 @@
   }
 
   const sim = d3.forceSimulation(nodes)
-    .force("charge", d3.forceManyBody().strength(-220))
+    .force("charge", d3.forceManyBody().strength(-210))
     .force("collide", d3.forceCollide(52))
     .force("x", d3.forceX(d => (d.roles && d.roles.is_me) ? WORLD_W/2 : targetX(d))
-      .strength(d => (d.roles && d.roles.is_me) ? 0.60 : (d.roles && d.roles.is_gateway) ? 0.24 : 0.10))
+      .strength(d => (d.roles && d.roles.is_me) ? 0.72 : (d.roles && d.roles.is_gateway) ? 0.24 : 0.10))
     .force("y", d3.forceY(d => (d.roles && d.roles.is_me) ? WORLD_H/2 : targetY(d))
-      .strength(d => (d.roles && d.roles.is_me) ? 0.60 : (d.roles && d.roles.is_gateway) ? 0.24 : 0.10))
-    .force("link", d3.forceLink(links).id(d => d.id).distance(160).strength(0.05));
+      .strength(d => (d.roles && d.roles.is_me) ? 0.72 : (d.roles && d.roles.is_gateway) ? 0.24 : 0.10))
+    .force("link", d3.forceLink(links).id(d => d.id).distance(150).strength(0.05));
 
   sim.on("tick", () => {
     nodes.forEach(clampToRect);
@@ -552,19 +603,16 @@
       .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
   });
 
-  // ---- startvisning: zoom ut litt, sentrert på “verden”
+  // startvisning: oversikt, sentrert på “verden”
   function fitInitial(){
-    // ønsket skala: oversikt, men ikke for liten
-    const k = 0.52;
+    const k = 0.65; // litt nærmere enn før
     const tx = (W()/2) - (WORLD_W/2) * k;
     const ty = (H()/2) - (WORLD_H/2) * k;
     svg.call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(k));
     svg.classed("zoomed-out", k < 0.55);
   }
 
-  // ---- resize: behold transform, men oppdater HUD/klasse
   const ro = new ResizeObserver(() => {
-    // lite kick så fysikken stabiliserer seg etter resize
     sim.alpha(0.25).restart();
   });
   ro.observe(stage);
