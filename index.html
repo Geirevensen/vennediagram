@@ -7,48 +7,81 @@
   <style>
     :root{
       --bg:#0b0f14;
-      --panel:#101826;
-      --panel2:#0f1723;
       --text:#e7eef9;
       --muted:#9bb0c9;
-      --stroke:#2b3a52;
-      --shadow: 0 10px 30px rgba(0,0,0,.45);
-      --cardW: 92px;
-      --cardH: 118px;
-      --avatarH: 72px;
-      --radius: 14px;
-      --enclosureStroke: 6px;
-      --enclosureFill: rgba(255,255,255,0.03);
+      --shadow: 0 14px 40px rgba(0,0,0,.55);
+
+      --cardW: 98px;
+      --cardH: 120px;
+      --avatarH: 74px;
+      --radius: 16px;
+
+      --enclStroke: 10px;
+      --enclFill: rgba(255,255,255,0.03);
+      --enclPad: 26;     /* luft inni innhegning */
+      --enclHeader: 34;  /* plass til gjeng-tittel */
     }
-    html,body{height:100%; margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
+
+    html,body{height:100%; margin:0; background:var(--bg); color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;}
+
     #wrap{position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr;}
     header{
       display:flex; gap:12px; align-items:center;
-      padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.06);
-      background:linear-gradient(to bottom, rgba(16,24,38,.9), rgba(16,24,38,.55));
-      backdrop-filter: blur(8px);
+      padding:12px 14px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      background:linear-gradient(to bottom, rgba(16,24,38,.92), rgba(16,24,38,.55));
+      backdrop-filter: blur(10px);
     }
-    header .title{font-weight:700; letter-spacing:.2px;}
+    header .title{font-weight:850; letter-spacing:.2px;}
     header input{
-      flex:1;
-      max-width: 520px;
+      flex:1; max-width: 520px;
       padding:10px 12px;
       border-radius: 12px;
-      border:1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
       color:var(--text);
       outline:none;
     }
-    header .hint{color:var(--muted); font-size:13px;}
+    header .controls{display:flex; gap:12px; align-items:center; color:var(--muted); font-size:13px;}
+    header label{display:flex; gap:8px; align-items:center; cursor:pointer; user-select:none;}
+    header input[type="checkbox"]{accent-color:#9bb0c9;}
+
     #stage{position:relative; overflow:hidden;}
     svg{width:100%; height:100%;}
-    .link{stroke:rgba(200,220,255,.25); stroke-width:2; vector-effect: non-scaling-stroke;}
-    .link.gift_med{stroke-width:3.5;}
-    .link.eks_med{stroke-dasharray:5 4;}
-    .link.forskerkollega_med{stroke-dasharray:2 6;}
-    .link.bruk{stroke:rgba(200,220,255,.25);}
-    .enclosure{fill:var(--enclosureFill); stroke:rgba(140,170,210,.35); stroke-width: var(--enclosureStroke); }
-    .encl-label{fill:rgba(230,245,255,.85); font-size:12px; letter-spacing:.2px;}
+
+    /* innhegninger */
+    .enclosure{
+      fill: var(--enclFill);
+      stroke-width: var(--enclStroke);
+      rx: 26px;
+      ry: 26px;
+      shape-rendering: geometricPrecision;
+      pointer-events:none;
+    }
+    .encl-title{
+      fill: rgba(240,248,255,.92);
+      font-size: 13px;
+      font-weight: 850;
+      letter-spacing: .2px;
+      pointer-events:none;
+      text-shadow: 0 10px 20px rgba(0,0,0,.6);
+    }
+
+    /* lenker: av som standard */
+    .link{
+      stroke: rgba(200,220,255,.22);
+      stroke-width: 2;
+      vector-effect: non-scaling-stroke;
+      opacity: 0;
+    }
+    .link.on{ opacity: 1; }
+    .link.gift_med{ stroke-width: 3.8; }
+    .link.eks_med{ stroke-dasharray: 6 5; }
+    .link.forskerkollega_med{ stroke-dasharray: 2 7; }
+    .link.bror_til{ stroke-width: 3.2; }
+
+    /* noder */
     .node{cursor:pointer;}
     .card{
       width: var(--cardW);
@@ -56,8 +89,9 @@
       border-radius: var(--radius);
       overflow:hidden;
       box-shadow: var(--shadow);
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      backdrop-filter: blur(6px);
     }
     .avatar{
       height: var(--avatarH);
@@ -65,7 +99,7 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      background: rgba(255,255,255,.06);
+      background: rgba(255,255,255,.07);
       border-bottom: 1px solid rgba(255,255,255,.08);
     }
     .avatar .dummy{
@@ -77,36 +111,13 @@
       font-size:14px;
     }
     .name{
-      padding:10px 10px 0 10px;
+      padding:10px 10px 10px 10px;
       font-size:13px;
-      font-weight:700;
+      font-weight:850;
       line-height:1.05;
       color:rgba(240,248,255,.94);
     }
-    .sub{
-      padding:6px 10px 10px 10px;
-      font-size:11.5px;
-      color:rgba(155,176,201,.85);
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .badge{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.05);
-      font-size:11px;
-      margin-top:6px;
-      color:rgba(230,245,255,.85);
-    }
-    .ring{
-      fill:none;
-      stroke: rgba(255,255,255,.28);
-      stroke-width:3;
-      filter: drop-shadow(0 10px 18px rgba(0,0,0,.6));
-    }
+
     /* overlay */
     #overlay{
       position:fixed; inset:0;
@@ -136,7 +147,7 @@
     #overlay .modal header .h{
       display:flex; flex-direction:column; gap:2px;
     }
-    #overlay .modal header .h .full{font-weight:800;}
+    #overlay .modal header .h .full{font-weight:900;}
     #overlay .modal header .h .tags{color:var(--muted); font-size:12.5px;}
     #overlay button{
       cursor:pointer;
@@ -160,11 +171,11 @@
   <header>
     <div class="title">Omgangskrets-kart</div>
     <input id="search" type="search" placeholder="Søk etter navn..." />
-    <div class="hint">Tips: klikk på en person for detaljer. Dra for å flytte.</div>
+    <div class="controls">
+      <label><input id="showLinks" type="checkbox" /> Vis alle linjer</label>
+    </div>
   </header>
-  <div id="stage">
-    <svg id="svg"></svg>
-  </div>
+  <div id="stage"><svg id="svg"></svg></div>
 </div>
 
 <div id="overlay" role="dialog" aria-modal="true">
@@ -185,138 +196,194 @@
 (async function(){
   const data = await fetch("./vennedata_network_v2.json").then(r => r.json());
 
-  // --- config
   const svg = d3.select("#svg");
   const stage = document.getElementById("stage");
-  const width = () => stage.clientWidth;
-  const height = () => stage.clientHeight;
+  const W = () => stage.clientWidth;
+  const H = () => stage.clientHeight;
 
-  const enclosureColors = new Map();
+  // Farger (lavsaturert)
   const palette = [
-    "rgba(160,190,220,.25)","rgba(195,170,215,.25)","rgba(170,210,190,.25)",
-    "rgba(220,190,160,.25)","rgba(190,220,160,.25)","rgba(210,170,170,.25)",
-    "rgba(170,180,225,.25)","rgba(205,205,170,.25)","rgba(180,210,225,.25)"
+    "rgba(160,190,220,.32)","rgba(195,170,215,.32)","rgba(170,210,190,.32)",
+    "rgba(220,190,160,.32)","rgba(190,220,160,.32)","rgba(210,170,170,.32)",
+    "rgba(170,180,225,.32)","rgba(205,205,170,.32)","rgba(180,210,225,.32)"
   ];
-  data.enclosures.forEach((e,i)=> enclosureColors.set(e.id, palette[i % palette.length]));
 
-  // helpers
+  // innhegninger: ekskluder "ingen"
+  const encl = data.enclosures.filter(e => e.id !== "ingen" && e.members && e.members.length);
+
+  // kart: id->person
   const peopleById = new Map(data.people.map(p => [p.id, p]));
-  const links = data.relations
-    // Unngå å tegne "venn_med" hvis du senere legger inn slike internt i innhegningene
+
+  // nodes: kopier for D3
+  const nodes = data.people.map(p => ({...p}));
+
+  // links
+  const links = (data.relations || [])
     .map(r => ({...r, source: peopleById.get(r.source), target: peopleById.get(r.target)}))
     .filter(l => l.source && l.target);
 
-  // Nodes: shallow copy so D3 can mutate x/y/vx/vy
-  const nodes = data.people.map(p => ({...p}));
+  // finn "meg"
+  // Anbefalt: sett roles.is_me=true i JSON. Hvis ikke, prøver vi et best-effort-navn:
+  const me = nodes.find(n => n.roles && n.roles.is_me) ||
+             nodes.find(n => (n.first_name || "").toLowerCase() === "geir");
 
-  // Pick "me" if marked; else none.
-  const me = nodes.find(n => n.roles && n.roles.is_me);
+  // Gateway: allerede i JSON (roles.is_gateway)
+  // --- layout: plasser innhegninger som rektangler rundt sentrum
+  function sizeFor(count){
+    // skaler areal med antall (gir luft)
+    const base = 260*220;
+    const per  = 120*120;
+    const area = base + count * per;
+    const aspect = 1.35;
+    const w = Math.sqrt(area * aspect);
+    const h = area / w;
+    return {w, h};
+  }
 
-  // --- layout: force graph with gentle clustering by enclosure tags
-  // Precompute group centroids (moving targets)
-  const groupIds = data.enclosures.map(e => e.id).filter(id => id !== "ingen");
+  function computeEnclosureRects(){
+    const cx = W()/2, cy = H()/2;
+    const ring = Math.min(W(), H()) * 0.30;
 
-  function groupForce(strength = 0.05){
-    return (alpha) => {
-      // moving anchor points on a ring, so groups spread out but overlap still possible
-      const W = width(), H = height();
-      const cx = W/2, cy = H/2;
-      const radius = Math.min(W,H) * 0.24;
+    const rects = new Map();
 
-      const anchors = new Map();
-      groupIds.forEach((gid, i) => {
-        const a = (i / groupIds.length) * Math.PI * 2;
-        anchors.set(gid, {x: cx + Math.cos(a) * radius, y: cy + Math.sin(a) * radius});
+    const order = encl.slice().sort((a,b) => (b.members.length - a.members.length));
+    order.forEach((e, i) => {
+      const s = sizeFor(e.members.length);
+
+      const a = (i / order.length) * Math.PI * 2;
+      const x = cx + Math.cos(a) * ring - s.w/2;
+      const y = cy + Math.sin(a) * ring - s.h/2;
+
+      rects.set(e.id, {
+        id: e.id,
+        label: e.label,
+        members: new Set(e.members),
+        x, y, w: s.w, h: s.h,
+        stroke: palette[i % palette.length]
       });
+    });
 
-      nodes.forEach(n => {
-        if (!n.groups || n.groups.length === 0) return;
-        // Average of anchors for groups -> supports overlap naturally
-        const pts = n.groups
-          .filter(g => anchors.has(g))
-          .map(g => anchors.get(g));
-        if (!pts.length) return;
-        const ax = d3.mean(pts, p => p.x);
-        const ay = d3.mean(pts, p => p.y);
-        n.vx += (ax - n.x) * strength * alpha;
-        n.vy += (ay - n.y) * strength * alpha;
-        // Gateway nodes get a slightly stronger pull toward their group anchors
-        if (n.roles && n.roles.is_gateway) {
-          n.vx += (ax - n.x) * strength * 0.75 * alpha;
-          n.vy += (ay - n.y) * strength * 0.75 * alpha;
-        }
-      });
+    return rects;
+  }
+
+  let rects = computeEnclosureRects();
+
+  // --- initial node positions: inni en “hjem-innhegning”
+  // For overlapp-personer: bruk gjennomsnitt av sentre, men velg en primær “hjem” for clamping.
+  function centerOf(r){ return {x: r.x + r.w/2, y: r.y + r.h/2}; }
+
+  function pickHomeRect(n){
+    const gs = (n.groups || []).filter(g => rects.has(g));
+    if (!gs.length) return null;
+    // gateway_for: foretrekk den
+    if (n.roles && n.roles.gateway_for && n.roles.gateway_for.length){
+      const g0 = n.roles.gateway_for.find(g => rects.has(g));
+      if (g0) return rects.get(g0);
+    }
+    return rects.get(gs[0]);
+  }
+
+  function avgTarget(n){
+    const gs = (n.groups || []).filter(g => rects.has(g));
+    if (!gs.length){
+      return {x: W()/2, y: H()/2};
+    }
+    const pts = gs.map(g => centerOf(rects.get(g)));
+    return {x: d3.mean(pts, p=>p.x), y: d3.mean(pts, p=>p.y)};
+  }
+
+  function gatewayAnchor(n){
+    // gateway skal være nærmest mulig "meg": trekk mot siden av innhegningen som vender inn mot sentrum
+    const home = pickHomeRect(n);
+    if (!home) return avgTarget(n);
+    const c = centerOf(home);
+    const mid = me ? {x: me.x || W()/2, y: me.y || H()/2} : {x: W()/2, y: H()/2};
+
+    const vx = c.x - mid.x;
+    const vy = c.y - mid.y;
+
+    // Finn kanten som peker mot sentrum
+    const towardX = (vx > 0) ? home.x : (home.x + home.w);
+    const towardY = (vy > 0) ? home.y : (home.y + home.h);
+
+    // Plasser litt inn i boksen, nær hjørnet vendt mot midten
+    const inset = 70;
+    return {
+      x: towardX + (vx > 0 ? inset : -inset),
+      y: towardY + (vy > 0 ? inset+20 : -inset+20)
     };
   }
 
-  const sim = d3.forceSimulation(nodes)
-    .force("link", d3.forceLink(links).id(d => d.id).distance(110).strength(0.22))
-    .force("charge", d3.forceManyBody().strength(-380))
-    .force("collide", d3.forceCollide(64))
-    .force("center", d3.forceCenter(width()/2, height()/2))
-    .force("group", groupForce(0.06));
+  nodes.forEach(n => {
+    n._homeRect = pickHomeRect(n);
+    const t = (n.roles && n.roles.is_gateway) ? gatewayAnchor(n) : avgTarget(n);
+    n.x = t.x + (Math.random() - 0.5) * 40;
+    n.y = t.y + (Math.random() - 0.5) * 40;
+  });
 
-  // If "me" exists, keep near center
-  if (me){
-    sim.force("x", d3.forceX(width()/2).strength(d => (d.id===me.id ? 0.35 : 0.03)));
-    sim.force("y", d3.forceY(height()/2).strength(d => (d.id===me.id ? 0.35 : 0.03)));
-  }
+  // --- SVG lag
+  const gEncl = svg.append("g");
+  const gLinks = svg.append("g");
+  const gNodes = svg.append("g");
 
-  // --- draw enclosures as soft hulls (simple convex hull). For v0, this works well.
-  const gEnclosures = svg.append("g").attr("class","enclosures");
-  const gLinks = svg.append("g").attr("class","links");
-  const gNodes = svg.append("g").attr("class","nodes");
+  // tegn innhegninger som rektangler
+  const enclSel = gEncl.selectAll("rect.enclosure")
+    .data(Array.from(rects.values()))
+    .enter()
+    .append("rect")
+    .attr("class","enclosure")
+    .attr("x", d=>d.x).attr("y", d=>d.y)
+    .attr("width", d=>d.w).attr("height", d=>d.h)
+    .attr("rx", 26).attr("ry", 26)
+    .attr("stroke", d=>d.stroke);
 
+  const enclTitle = gEncl.selectAll("text.encl-title")
+    .data(Array.from(rects.values()))
+    .enter()
+    .append("text")
+    .attr("class","encl-title")
+    .attr("x", d=>d.x + 16)
+    .attr("y", d=>d.y + 22)
+    .text(d=>d.label);
+
+  // links (skjult som standard)
   const linkSel = gLinks.selectAll("line")
     .data(links)
     .enter()
     .append("line")
     .attr("class", d => `link ${d.type || ""}`);
 
-  // Node: foreignObject for HTML cards
+  // noder: kort uten gruppetekst
   const nodeSel = gNodes.selectAll("g.node")
     .data(nodes)
     .enter()
     .append("g")
     .attr("class","node")
     .call(d3.drag()
-      .on("start", (event, d) => { if (!event.active) sim.alphaTarget(0.2).restart(); d.fx=d.x; d.fy=d.y; })
-      .on("drag", (event, d) => { d.fx=event.x; d.fy=event.y; })
-      .on("end", (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
+      .on("start", (event, d) => { if (!event.active) sim.alphaTarget(0.22).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag",  (event, d) => { d.fx=event.x; d.fy=event.y; })
+      .on("end",   (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx=null; d.fy=null; })
     )
     .on("click", (_, d) => openOverlay(d));
 
-  nodeSel.append("circle")
-    .attr("r", 0)
-    .attr("class","ring");
-
   const fo = nodeSel.append("foreignObject")
-    .attr("width", 92)
-    .attr("height", 118)
-    .attr("x", -46)
-    .attr("y", -59);
+    .attr("width", 98)
+    .attr("height", 120)
+    .attr("x", -49)
+    .attr("y", -60);
 
   const card = fo.append("xhtml:div").attr("class","card");
   const avatar = card.append("div").attr("class","avatar");
-  avatar.append("div").attr("class","dummy").text("◻︎");
+
+  avatar.each(function(d){
+    const el = d3.select(this);
+    // avatar tom -> dummy
+    el.append("div").attr("class","dummy").text("◻︎");
+  });
 
   card.append("div").attr("class","name").text(d => d.display_name || d.first_name || d.name || ("ID " + d.id));
-  card.append("div").attr("class","sub").text(d => (d.group_labels && d.group_labels[0]) ? d.group_labels[0] : "");
 
-  // Highlight ring for "me" and gateway nodes
-  nodeSel.filter(d => d.roles && d.roles.is_me)
-    .append("circle")
-    .attr("class","ring")
-    .attr("r", 66)
-    .attr("stroke", "rgba(255,255,255,.32)");
-
-  nodeSel.filter(d => d.roles && d.roles.is_gateway && !d.roles.is_me)
-    .append("circle")
-    .attr("class","ring")
-    .attr("r", 62)
-    .attr("stroke", "rgba(255,255,255,.18)");
-
-  // Overlay logic
+  // overlay
   const overlay = document.getElementById("overlay");
   const ovName = document.getElementById("ovName");
   const ovTags = document.getElementById("ovTags");
@@ -332,13 +399,22 @@
     if (d.bio && d.bio.trim().length){
       ovBio.textContent = d.bio.trim();
     } else {
-      ovBio.innerHTML = '<span class="empty">Ingen biografi ennå. (Du kan fylle inn senere i JSON-filen.)</span>';
+      ovBio.innerHTML = '<span class="empty">Ingen biografi ennå.</span>';
+    }
+    // vis kun lenker for valgt node (med mindre "vis alle" er på)
+    if (!document.getElementById("showLinks").checked){
+      linkSel.classed("on", l => (l.source.id === d.id || l.target.id === d.id));
     }
     overlay.style.display="flex";
   }
-  function closeOverlay(){ overlay.style.display="none"; }
+  function closeOverlay(){
+    overlay.style.display="none";
+    if (!document.getElementById("showLinks").checked){
+      linkSel.classed("on", false);
+    }
+  }
 
-  // Search
+  // Søk: dim alt annet. Klikk for lenker.
   const search = document.getElementById("search");
   search.addEventListener("input", () => {
     const q = search.value.trim().toLowerCase();
@@ -347,81 +423,75 @@
       const hay = (d.name + " " + (d.display_name||"")).toLowerCase();
       return hay.includes(q) ? 1 : 0.15;
     });
-    linkSel.style("opacity", l => {
-      if (!q) return 1;
-      const hs = (l.source.name||"").toLowerCase();
-      const ht = (l.target.name||"").toLowerCase();
-      return (hs.includes(q) || ht.includes(q)) ? 1 : 0.05;
-    });
   });
 
-  // Convex hull helpers for enclosures (simple)
-  function hullPath(points, padding=32){
-    if (points.length < 3) return null;
-    const hull = d3.polygonHull(points);
-    if (!hull) return null;
-    // Expand hull by padding (approx by moving points away from centroid)
-    const cx = d3.mean(hull, p => p[0]);
-    const cy = d3.mean(hull, p => p[1]);
-    const expanded = hull.map(([x,y]) => {
-      const dx = x - cx, dy = y - cy;
-      const len = Math.hypot(dx,dy) || 1;
-      return [x + (dx/len)*padding, y + (dy/len)*padding];
-    });
-    return "M" + expanded.map(p => p.join(",")).join("L") + "Z";
+  // toggle for lenker
+  const showLinks = document.getElementById("showLinks");
+  showLinks.addEventListener("change", () => {
+    linkSel.classed("on", showLinks.checked);
+  });
+
+  // --- forces: mild, med "hjem i rektangel"
+  function clampToRect(n){
+    // sørg for at node ligger inni hjem-innhegningen (med padding)
+    const r = n._homeRect;
+    if (!r) return;
+    const pad = +getComputedStyle(document.documentElement).getPropertyValue("--enclPad") || 26;
+    const header = +getComputedStyle(document.documentElement).getPropertyValue("--enclHeader") || 34;
+    const minX = r.x + pad;
+    const maxX = r.x + r.w - pad;
+    const minY = r.y + pad + header;
+    const maxY = r.y + r.h - pad;
+
+    n.x = Math.max(minX, Math.min(maxX, n.x));
+    n.y = Math.max(minY, Math.min(maxY, n.y));
   }
 
-  // enclosure shapes + labels (created once; updated each tick)
-  const enclData = data.enclosures.filter(e => e.id !== "ingen" && e.members && e.members.length >= 3);
-  const enclSel = gEnclosures.selectAll("path.enclosure")
-    .data(enclData)
-    .enter()
-    .append("path")
-    .attr("class","enclosure")
-    .attr("stroke", e => enclosureColors.get(e.id) || "rgba(160,190,220,.25)");
+  // “målpunkt”: gateway nærmest midten, andre mot snitt av gruppesentre
+  function targetX(d){
+    const t = (d.roles && d.roles.is_gateway) ? gatewayAnchor(d) : avgTarget(d);
+    return t.x;
+  }
+  function targetY(d){
+    const t = (d.roles && d.roles.is_gateway) ? gatewayAnchor(d) : avgTarget(d);
+    return t.y;
+  }
 
-  const enclLabels = gEnclosures.selectAll("text.encl-label")
-    .data(enclData)
-    .enter()
-    .append("text")
-    .attr("class","encl-label")
-    .text(e => e.label);
+  const sim = d3.forceSimulation(nodes)
+    .force("charge", d3.forceManyBody().strength(-260))
+    .force("collide", d3.forceCollide(62))
+    .force("x", d3.forceX(d => (d.roles && d.roles.is_me) ? W()/2 : targetX(d))
+      .strength(d => (d.roles && d.roles.is_me) ? 0.55 : (d.roles && d.roles.is_gateway) ? 0.22 : 0.10))
+    .force("y", d3.forceY(d => (d.roles && d.roles.is_me) ? H()/2 : targetY(d))
+      .strength(d => (d.roles && d.roles.is_me) ? 0.55 : (d.roles && d.roles.is_gateway) ? 0.22 : 0.10))
+    .force("link", d3.forceLink(links).id(d => d.id).distance(140).strength(0.06));
 
-  // resize
+  // Resize: bygg rektangler på nytt og restart
   const ro = new ResizeObserver(() => {
-    sim.force("center", d3.forceCenter(width()/2, height()/2));
-    sim.alpha(0.25).restart();
+    rects = computeEnclosureRects();
+    // oppdater data-binding for innhegninger
+    const rr = Array.from(rects.values());
+    enclSel.data(rr).attr("x", d=>d.x).attr("y", d=>d.y).attr("width", d=>d.w).attr("height", d=>d.h).attr("stroke", d=>d.stroke);
+    enclTitle.data(rr).attr("x", d=>d.x + 16).attr("y", d=>d.y + 22).text(d=>d.label);
+
+    // oppdater hjem-referanser
+    nodes.forEach(n => n._homeRect = pickHomeRect(n));
+
+    sim.alpha(0.35).restart();
   });
   ro.observe(stage);
 
   sim.on("tick", () => {
-    // links
+    // clamp først (holder rektanglene “rene”)
+    nodes.forEach(clampToRect);
+
+    nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
+
     linkSel
       .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
       .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-
-    // nodes
-    nodeSel.attr("transform", d => `translate(${d.x},${d.y})`);
-
-    // enclosures hulls
-    enclSel.attr("d", e => {
-      const pts = e.members
-        .map(id => nodes.find(n => n.id === id))
-        .filter(Boolean)
-        .map(n => [n.x, n.y]);
-      return hullPath(pts, 40);
-    });
-
-    enclLabels
-      .attr("x", e => {
-        const pts = e.members.map(id => nodes.find(n => n.id===id)).filter(Boolean);
-        return d3.mean(pts, n => n.x) || 0;
-      })
-      .attr("y", e => {
-        const pts = e.members.map(id => nodes.find(n => n.id===id)).filter(Boolean);
-        return (d3.min(pts, n => n.y) || 0) - 78;
-      });
   });
+
 })();
 </script>
 </body>
